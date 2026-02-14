@@ -1,46 +1,34 @@
-import { CELL_SIZE, PARTICLE_COUNT, PARTICLE_RADIUS, PARTICLE_PROPS } from "./config";
-
-const PRESETS = [
-  { damping: 0.001, attraction: 0.3, repel: 0.1, gravity: 0.5 },
-  { damping: 0.001, attraction: 3, repel: 0, gravity: -1 },
-  { damping: 0.05, attraction: 3, repel: 0.05, gravity: 0 },
-  { damping: 0.05, attraction: 3, repel: 0.2, gravity: 4 },
-  { damping: 0.1, attraction: 3, repel: 0.2, gravity: 8 },
-  { damping: 0.3, attraction: 0.1, repel: 0.2, gravity: 12 },
-  { damping: 0.05, attraction: 0.3, repel: 0.1, gravity: 16 },
-  { damping: 0.05, attraction: 3, repel: 0.08, gravity: 20 },
-];
-
-let damping = 0;
-let attraction = 0;
-let repel = 0;
-let gravity = 0;
-
-window.setPreset = currentPreset => {
-  damping = PRESETS[currentPreset].damping;
-  attraction = PRESETS[currentPreset].attraction;
-  repel = PRESETS[currentPreset].repel;
-  gravity = PRESETS[currentPreset].gravity;
-};
-setPreset(0);
+import { MAX_PARTICLE_COUNT, PARTICLE_PROPS, settings } from "./settings";
+import { initControlPanel } from "./controlPanel";
 
 const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
-
 const frameTimeElement = document.getElementById('frame-time');
-const speedElement = document.getElementById('speed');
 
 let gridCols = 0;
 let gridRows = 0;
 let gridHeads;
-let nextParticle = new Int32Array(PARTICLE_COUNT);
+
+// positions
+const px = new Float32Array(MAX_PARTICLE_COUNT);
+const py = new Float32Array(MAX_PARTICLE_COUNT);
+
+// velocities
+const vx = new Float32Array(MAX_PARTICLE_COUNT);
+const vy = new Float32Array(MAX_PARTICLE_COUNT);
+
+// other
+const particleTypes = new Int8Array(MAX_PARTICLE_COUNT);
+const nextParticle = new Int32Array(MAX_PARTICLE_COUNT);
+
+initControlPanel();
 
 function rebuildGrid() {
   gridHeads.fill(-1);
 
-  for (let i = 0; i < PARTICLE_COUNT; i++) {
-    const cx = (px[i] / CELL_SIZE) | 0;
-    const cy = (py[i] / CELL_SIZE) | 0;
+  for (let i = 0; i < settings.particleCount; i++) {
+    const cx = (px[i] / settings.cellSize) | 0;
+    const cy = (py[i] / settings.cellSize) | 0;
 
     const cellIndex = cy * gridCols + cx;
 
@@ -50,9 +38,9 @@ function rebuildGrid() {
 }
 
 function forEachNeighborPair(fn) {
-  for (let i = 0; i < PARTICLE_COUNT; i++) {
-    const cx = (px[i] / CELL_SIZE) | 0;
-    const cy = (py[i] / CELL_SIZE) | 0;
+  for (let i = 0; i < settings.particleCount; i++) {
+    const cx = (px[i] / settings.cellSize) | 0;
+    const cy = (py[i] / settings.cellSize) | 0;
 
     for (let gy = cy - 1; gy <= cy + 1; gy++) {
       if (gy < 0 || gy >= gridRows) continue;
@@ -67,7 +55,7 @@ function forEachNeighborPair(fn) {
             const dx = px[p] - px[i];
             const dy = py[p] - py[i];
 
-            if (dx * dx + dy * dy <= CELL_SIZE * CELL_SIZE) {
+            if (dx * dx + dy * dy <= settings.cellSize * settings.cellSize) {
               fn(i, p, dx, dy);
             }
           }
@@ -81,15 +69,15 @@ function forEachNeighborPair(fn) {
 
 function interactParticles() {
   forEachNeighborPair((i, j, dx, dy) => {
-    const d2 = dx * dx + dy * dy;
+    const d2 = dx * dx + dy * dy + 0.001;
 
-    if (d2 < PARTICLE_RADIUS * PARTICLE_RADIUS * 4) {
-      const force = -repel;
+    if (d2 < settings.particleRadius * settings.particleRadius * 4) {
+      const force = -settings.repel / d2;
       const fx = dx * force;
       const fy = dy * force;
       vx[i] += fx; vy[i] += fy;
       vx[j] -= fx; vy[j] -= fy;
-      return;
+      // return;
     }
 
     const ti = particleTypes[i] | 0;
@@ -101,7 +89,7 @@ function interactParticles() {
     const cji = PARTICLE_PROPS[tj][ti + 1];
 
     // Base magnitude
-    const base = attraction / d2;
+    const base = settings.attraction / d2;
 
     // Apply per-particle coefficient (directional)
     const fi = base * cij;
@@ -134,10 +122,8 @@ function getSprite(particleType, speedBucket, r) {
   const g = c.getContext("2d");
   g.translate(size / 2, size / 2);
 
-  const a = Math.sqrt(speedBucket) * 7 + 10;
+  const a = Math.sqrt(speedBucket) * 7 + settings.lightnessOffset;
   g.fillStyle = `hsl(${PARTICLE_PROPS[particleType][0]}, 100%, ${a}%)`;
-  g.shadowBlur = 5;
-  g.shadowColor = g.fillStyle;
   g.beginPath();
   g.arc(0, 0, r, 0, Math.PI * 2);
   g.fill();
@@ -146,15 +132,19 @@ function getSprite(particleType, speedBucket, r) {
   return c;
 }
 
-function resizeCanvas() {
+export function purgeSpriteCache() {
+  spriteCache.clear();
+}
+
+export function resizeCanvas() {
   canvas.width = window.innerWidth;
   canvas.height = window.innerHeight;
 
   ctx.fillStyle = "rgb(20, 15, 11)";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  gridCols = Math.ceil(canvas.width / CELL_SIZE);
-  gridRows = Math.ceil(canvas.height / CELL_SIZE);
+  gridCols = Math.ceil(canvas.width / settings.cellSize);
+  gridRows = Math.ceil(canvas.height / settings.cellSize);
 
   gridHeads = new Int32Array(gridCols * gridRows);
 }
@@ -162,70 +152,53 @@ function resizeCanvas() {
 window.addEventListener("resize", resizeCanvas);
 resizeCanvas();
 
-// positions
-const px = new Float32Array(PARTICLE_COUNT);
-const py = new Float32Array(PARTICLE_COUNT);
-
-// velocities
-const vx = new Float32Array(PARTICLE_COUNT);
-const vy = new Float32Array(PARTICLE_COUNT);
-
-// other
-const particleTypes = new Int8Array(PARTICLE_COUNT);
-
-for (let i = 0; i < PARTICLE_COUNT; i++) {
+for (let i = 0; i < MAX_PARTICLE_COUNT; i++) {
   px[i] = Math.random() * canvas.width;
   py[i] = Math.random() * canvas.height;
-
-  // const angle = Math.random() * Math.PI * 2;
-  // const s = 0.5 + Math.random() * 0.5;
-
-  // vx[i] = Math.cos(angle) * s;
-  // vy[i] = Math.sin(angle) * s;
 
   particleTypes[i] = Math.floor(Math.random() * PARTICLE_PROPS.length);
 }
 
 function updateParticles() {
-  for (let i = 0; i < PARTICLE_COUNT; i++) {
+  for (let i = 0; i < settings.particleCount; i++) {
     const dx = px[i] - canvas.width / 2;
     const dy = py[i] - canvas.height / 2;
     const d2 = dx * dx + dy * dy + 0.001;
-    if (d2 > 20000) {
-      vx[i] -= 2 * gravity / d2 * dx;
-      vy[i] -= 2 * gravity / d2 * dy;
+    if (d2 > 2000) {
+      vx[i] -= 2 * settings.centralGravity / d2 * dx;
+      vy[i] -= 2 * settings.centralGravity / d2 * dy;
     }
 
-    vx[i] /= 1 + damping;
-    vy[i] /= 1 + damping;
+    vx[i] /= 1 + settings.damping;
+    vy[i] /= 1 + settings.damping;
 
     px[i] += vx[i];
     py[i] += vy[i];
 
-    if (px[i] <= PARTICLE_RADIUS) {
-      px[i] = PARTICLE_RADIUS;
+    if (px[i] <= settings.particleRadius) {
+      px[i] = settings.particleRadius;
       vx[i] *= -1;
-    } else if (px[i] >= canvas.width - PARTICLE_RADIUS) {
-      px[i] = canvas.width - PARTICLE_RADIUS;
+    } else if (px[i] >= canvas.width - settings.particleRadius) {
+      px[i] = canvas.width - settings.particleRadius;
       vx[i] *= -1;
     }
 
-    if (py[i] <= PARTICLE_RADIUS) {
-      py[i] = PARTICLE_RADIUS;
+    if (py[i] <= settings.particleRadius) {
+      py[i] = settings.particleRadius;
       vy[i] *= -1;
-    } else if (py[i] >= canvas.height - PARTICLE_RADIUS) {
-      py[i] = canvas.height - PARTICLE_RADIUS;
+    } else if (py[i] >= canvas.height - settings.particleRadius) {
+      py[i] = canvas.height - settings.particleRadius;
       vy[i] *= -1;
     }
   }
 }
 
 function drawParticles(ctx) {
-  for (let i = 0; i < PARTICLE_COUNT; i++) {
+  for (let i = 0; i < settings.particleCount; i++) {
     const particleType = particleTypes[i];
     const speedBucket = Math.min(vx[i] * vx[i] + vy[i] * vy[i], 99) | 0;
 
-    const s = getSprite(particleType, speedBucket, PARTICLE_RADIUS);
+    const s = getSprite(particleType, speedBucket, settings.particleRadius);
 
     ctx.drawImage(
       s,
@@ -238,7 +211,7 @@ function drawParticles(ctx) {
 let fpsRefreshCounter = 0;
 let startTime = new Date().getTime();
 function animate() {
-  ctx.fillStyle = "rgb(17, 13, 9, 0.3)";
+  ctx.fillStyle = `rgb(17, 13, 9, ${1 - settings.smudge})`;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
   ctx.globalCompositeOperation = "lighter";
@@ -253,12 +226,6 @@ function animate() {
 
   if (fpsRefreshCounter >= 50) {
     frameTimeElement.textContent = (new Date().getTime() - startTime) / 50;
-    speedElement.innerHTML = `
-damping: ${damping}<br />
-attraction: ${attraction}<br />
-repel: ${repel}<br />
-gravity: ${gravity}<br />
-`;
 
     startTime = new Date().getTime();
     fpsRefreshCounter = 0;
@@ -269,8 +236,3 @@ gravity: ${gravity}<br />
 ctx.fillStyle = "rgb(20, 15, 11)";
 ctx.fillRect(0, 0, canvas.width, canvas.height);
 animate();
-
-setInterval(() => {
-  setPreset(Math.floor(Math.random() * PRESETS.length));
-}, 2450);
-

@@ -9,5 +9,49 @@ canvas {
   background-color: #000;
   color: #eee;
   padding: 0.1rem 0.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
   font-family: monospace;
+}
+
+#control-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  background-color: #000;
+  color: #eee;
+  padding: 0.5rem 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  font-family: monospace;
+  opacity: 0;
+  transition: 0.3s;
+
+  &:hover {
+    opacity: 1;
+  }
+}
+
+#control-panel .control {
+  display: grid;
+  grid-template-columns: 1fr 120px 70px;
+  align-items: center;
+  gap: 10px;
+  padding: 2px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+#control-panel .control:last-child {
+  border-bottom: none;
+}
+
+#control-panel input[type="range"] {
+  width: 100%;
+}
+
+#control-panel input[type="number"] {
+  width: 90px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(0, 0, 0, 0.35);
+  color: inherit;
 }
