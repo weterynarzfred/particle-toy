@@ -1,0 +1,13 @@
+canvas {
+  display: block;
+}
+
+#debug {
+  position: fixed;
+  top: 0;
+  left: 0;
+  background-color: #000;
+  color: #eee;
+  padding: 0.1rem 0.5rem;
+  font-family: monospace;
+}
